@@ -1,0 +1,8 @@
+numpy
+matplotlib
+scipy
+opencv-python
+torch
+tqdm
+segmentation-models-pytorch
+albumentations

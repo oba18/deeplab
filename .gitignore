@@ -1,3 +1,6 @@
 /deeplab_env
 /trainval
 .DS_Store
+/notebooks
+/src/test
+/VOC2010
