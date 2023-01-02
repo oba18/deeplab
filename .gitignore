@@ -4,3 +4,4 @@
 /notebooks
 /src/test
 /VOC2010
+*.pyc

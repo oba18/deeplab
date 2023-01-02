@@ -28,15 +28,28 @@ def get_preprocessing(preprocessing_fn):
         ]
     else:
       _transform = [
-              albu.Lambda(image=preprocessing_fn),
-              albu.Resize(256,256),
-              albu.Lambda(image=to_tensor, mask=to_tensor),
+            albu.Lambda(image=preprocessing_fn),
+            albu.Resize(256,256),
+            albu.Lambda(image=to_tensor, mask=to_tensor),
           ]
     return albu.Compose(_transform)
+
+def get_training_augmentation():
+  #albumentationsを用いたデータ拡張はコチラ
   
+  train_transform = [
+          albu.HorizontalFlip(p=0.5),
+          albu.Rotate(p=0.5,limit=(-30,30)),
+          albu.RandomResizedCrop(height=IMAGE_SIZE, width=IMAGE_SIZE, p=0.5),
+          albu.Resize(256,256),
+        
+      ]
+  return albu.Compose(train_transform)
+
   
 TRAIN = 0
 VALID = 1
+IMAGE_SIZE = 256
 classes = [
   'background',
   'hair',
@@ -84,8 +97,9 @@ model = smp.DeepLabV3Plus(
     classes=len(classes),
     activation=ACTIVATION,
 )
-
-model = model.to("cpu")
+DEVICE = 'cuda' if torch.cuda.is_available()  else "cpu"
+print(DEVICE)
+model = model.to(DEVICE)
 
 preprocessing_fn =smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 ids = train_test_split(files_list)
@@ -94,6 +108,7 @@ train_dataset = dataset.MyDataset(
   ids[TRAIN],
   '../../persons_dataset/jpg',
   '../../persons_dataset/mat',
+  augmentation=get_training_augmentation(),
   preprocessing=get_preprocessing(preprocessing_fn),
 )
 
@@ -107,7 +122,6 @@ valid_dataset = dataset.MyDataset(
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, drop_last = True, num_workers=0)
 valid_loader = DataLoader(valid_dataset, batch_size=32, shuffle=False, drop_last = True, num_workers=0)
 
-
 # 精度確認指標
 metrics = [
     utils.metrics.IoU(threshold=0.5),
@@ -120,7 +134,6 @@ optimizer = torch.optim.Adam([
     dict(params=model.parameters(), lr=0.0001),#あまりにここが大きいと全て0、学習に失敗します。
 ])
 
-DEVICE = 'cpu'
 # 1Epochトレイン用
 train_epoch = smp.utils.train.TrainEpoch(
     model,
@@ -140,18 +153,26 @@ valid_epoch = smp.utils.train.ValidEpoch(
 
 # 学習 
 max_score = 0
-for i in range(0, 30):
+epoch = 10
+f = open('../../output/result.txt', 'w', encoding='UTF-8')
 
+for i in range(0, epoch):
+    
     print('\nEpoch: {}'.format(i))
     try:
         train_logs = train_epoch.run(train_loader)
         val_logs = valid_epoch.run(valid_loader)
         print(val_logs)
+        f.write(f"{i}: {val_logs}")
+        
     except Exception as e:
         print(e)
 
+    torch.save(model, f'../../output/epoch-{i}.pth')
+    
     # do something (save model, change lr, etc.)
     if max_score < val_logs['iou_score']:
         max_score = val_logs['iou_score']
-        torch.save(model, f'{DECODER}_{ENCODER}.pth')
+        torch.save(model, f'prd.pth')
         print('Model saved!')
+f.close()
